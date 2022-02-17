@@ -92,8 +92,8 @@ kableExtra::kable(config_df, row.names = FALSE ) %>%
 
 ## Survival Test
 ```{r survival test}
-### Repeated Measures (Longitudinal) Example
-## Lets see how glucose predicts mortaility in SLAM
+# Repeated Measures (Longitudinal) Example
+# Lets see how glucose predicts mortaility in SLAM
 
 if (requireNamespace("dplyr", quietly = TRUE)) {
   # Checkout dataframes --------------------------------------------------------
