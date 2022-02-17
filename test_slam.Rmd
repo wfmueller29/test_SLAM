@@ -92,9 +92,10 @@ kableExtra::kable(config_df, row.names = FALSE ) %>%
 
 ## Survival Test
 ```{r survival test}
-# Repeated Measures (Longitudinal) Example
+# Repeated Measures (Longitudinal) Example -------------------------------------
 # Lets see how glucose predicts mortaility in SLAM
 
+# make sure dplyr is loaded
 if (requireNamespace("dplyr", quietly = TRUE)) {
   # Checkout dataframes --------------------------------------------------------
   # Checkout census
@@ -117,8 +118,8 @@ if (requireNamespace("dplyr", quietly = TRUE)) {
   main <- dplyr::filter(main, !is.na(died))
   # create age, age of death, and difference between age and age of death
   main <- dplyr::mutate(main, age_wk = as.numeric(difftime(date, dob, units = "weeks")),  
-           age_wk_death = as.numeric(difftime(died, dob, units = "weeks")), 
-           dif = age_wk_death - age_wk)  
+                        age_wk_death = as.numeric(difftime(died, dob, units = "weeks")), 
+                        dif = age_wk_death - age_wk)  
   # filter mice measured after death because tmerge will throw error
   main <- dplyr::filter(main, age_wk <= age_wk_death) 
   # filter mice that were measured same day as death because tmerge with throw an error
@@ -156,7 +157,7 @@ if (requireNamespace("dplyr", quietly = TRUE)) {
   
   # Lets look at final HR table
   dplyr::select(hrs$hr_table, final)
-
+  
   # Lets make predictions on other data ---------------------------------------
   # create new data for 4 mice
   pred_df <- data.frame(age_wk = c(40, 80, 20, 100),
@@ -167,213 +168,118 @@ if (requireNamespace("dplyr", quietly = TRUE)) {
   predict(fit, newdata = pred_df, type = "risk")
   
 } else{
-  print("Install dplyr to run this example")
+  message("Install dplyr to run this example")
 }
-
-
 ```
+
 ## merge_diftime test
 
 ```{r merge }
-## Example Merging clostest NMR to Glucose
+# Example Merging clostest NMR to Glucose --------------------------------------
 
-#load libs
-library(SLAM)
-library(dplyr)
-
-## Checkout census
-head(data_SLAM_census)
-
-## Checkout glucose
-head(data_SLAM_gluc)
-
-## Checkout nmr
-head(data_SLAM_nmr)
-
-## Create gluc
-gluc <- data_SLAM_gluc %>%
-  left_join(data_SLAM_census, by = "idno") %>%
-  select(-c(lact, cohort, animal_id, tag, taghistory, cage, eartag, name, X)) %>%
-  mutate(age_wk = difftime(date, dob, units = "weeks"),
-         date = as.Date(date, "%m%d%Y"))
-
-## Create nmr
-nmr <- data_SLAM_nmr %>%
-  left_join(data_SLAM_census, by = "idno") %>%
-  select(-c(cohort, animal_id, tag, taghistory, cage, eartag, name, X))%>%
-  mutate(age_wk = difftime(date, dob, units = "weeks"),
-         date = as.Date(date, "%m%d%Y"))
-
-gluc_nmr <- merge_diftime(data1 = gluc,
-                          data2 = nmr,
-                          id = "idno",
-                          age = "age_wk",
-                          vars = c("bw","lean","fluid","fat"))
-
-## Checkout results
-head(gluc_nmr)
+# make sure dplyr is loaded
+if (requireNamespace("dplyr", quietly = TRUE)) {
+  # Checkout data --------------------------------------------------------------
+  # Checkout census
+  head(data_SLAM_census)
+  
+  # Checkout glucose
+  head(data_SLAM_gluc)
+  
+  # Checkout nmr
+  head(data_SLAM_nmr)
+  
+  # Create gluc ----------------------------------------------------------------
+  # join glucose and census for dob and other infor
+  gluc <- dplyr::left_join(data_SLAM_gluc, data_SLAM_census, by = "idno") 
+  # drop useless vars
+  gluc <- dplyr::select(gluc, -c(lact, cohort, animal_id, tag, taghistory, cage, eartag, name, X))
+  # create age for merging and format data so it makes sense
+  gluc <- dplyr::mutate(gluc, age_wk = difftime(date, dob, units = "weeks"),
+                        date = as.Date(date, "%m%d%Y"))
+  
+  # Create nmr -----------------------------------------------------------------
+  # join nmr with census for dob and other info
+  nmr <- dplyr::left_join(data_SLAM_nmr, data_SLAM_census, by = "idno") 
+  # drop useless columns
+  nmr <- dplyr::select(nmr, -c(cohort, animal_id, tag, taghistory, cage, eartag, name, X))
+  # create age for merging and format data so it makes sense
+  nmr <- dplyr::mutate(nmr, age_wk = difftime(date, dob, units = "weeks"),
+                       date = as.Date(date, "%m%d%Y"))
+  
+  # Use merge_diftime ----------------------------------------------------------
+  gluc_nmr <- merge_diftime(data1 = gluc,
+                            data2 = nmr,
+                            id = "idno",
+                            age = "age_wk",
+                            vars = c("bw","lean","fluid","fat"), 
+                            threshold = 5,
+                            suffixes = c(".gluc", ".nmr"))
+  
+  # Checkout results
+  head(gluc_nmr)
+  apply(apply(gluc_nmr, 2, is.na), 2, sum)
+  
+  # Imputation ----------------------------------------------------------------
+  # we have a lot of na's lets see if we can impute these values with missed forest
+  gluc_nmr_imp <- impute_mf(data = gluc_nmr,
+                            factors = c("sex","strain"),
+                            drop = c("dob", "date"))
+} else{
+  message("Install dplyr to run this example")
+}
 
 ```
 
 ## Impute Tests
 
 ```{r impute}
-#load libs
-library(SLAM)
-library(dplyr)
+# use example from merge_diftime -----------------------------------------------
 
-## Checkout census
-head(data_SLAM_census)
-
-## Checkout glucose
-head(data_SLAM_gluc)
-
-## Checkout nmr
-head(data_SLAM_nmr)
-
-## Create gluc 
-gluc <- data_SLAM_gluc %>%
-  left_join(data_SLAM_census, by = "idno") %>%
-  select(-c(lact, cohort, animal_id, tag, taghistory, cage, eartag, name, X)) %>%
-  mutate(age_wk = difftime(date, dob, units = "weeks"),
-         date = as.Date(date, "%m%d%Y"))
-
-## Create nmr
-nmr <- data_SLAM_nmr %>%
-  left_join(data_SLAM_census, by = "idno") %>%
-  select(-c(cohort, animal_id, tag, taghistory, cage, eartag, name, X))%>%
-  mutate(age_wk = difftime(date, dob, units = "weeks"),
-         date = as.Date(date, "%m%d%Y"))
-
-## merge glucose and nmr, ensuring complete cases for bw, lean, fluid, and fat
-## Also nmr measurement must fall within 5 weeks of the glucose measurement
-gluc_nmr <- merge_diftime(data1 = gluc,
-                          data2 = nmr,
-                          id = "idno",
-                          age = "age_wk",
-                          vars = c("bw","lean","fluid","fat"),
-                          suffixes = c(".gluc",".nmr"), 
-                          threshold = 5)
-
-## Checkout results
-head(gluc_nmr)
-apply(apply(gluc_nmr, 2, is.na),2, sum)
-
-merge_diftime <- function(data1, data2, id, age, threshold = Inf, vars = NULL, where = "both", suffixes = c(".1",".2"), clean_vars = TRUE){
-  data1 <- gluc
-  data2 <- nmr
-  id <- "idno"
-  age <- "age_wk"
-  threshold <- 5
-  vars <- c("bw", "lean","fat","fluid")
-  suffixes  <- c(".gluc",".nmr")
-  where <- "both"
-  clean_vars <- TRUE
+# make sure dplyr is loaded
+if (requireNamespace("dplyr", quietly = TRUE)) {
+  # Checkout data --------------------------------------------------------------
+  # Checkout census
+  head(data_SLAM_census)
   
-  ## manually add suffixes
-  names(data1) <- paste0(names(data1), suffixes[1])
-  names(data2) <- paste0(names(data2), suffixes[2])
+  # Checkout glucose
+  head(data_SLAM_gluc)
   
-  ## create corresponding id vars
-  if(length(id) == 1){
-    id1 <- paste0(id, suffixes[1])
-    id2 <- paste0(id, suffixes[2])
-  } else if(length(id) == 2){
-    id1 <- paste0(id[1], suffixes[1])
-    id2 <- paste0(id[2], suffixes[1])
-  } else{
-    stop("id must be length 1 or 2")
-  }
+  # Checkout nmr
+  head(data_SLAM_nmr)
   
-  ## create corresponding age vars
-  if(length(age) == 1){
-    age1 <- paste0(age, suffixes[1])
-    age2 <- paste0(age, suffixes[2])
-  } else if(length(age) == 2){
-    age1 <- paste0(age[1], suffixes[1])
-    age2 <- paste0(age[2], suffixes[1])
-  } else{
-    stop("age must be length 1 or 2")
-  }
+  # Create gluc ----------------------------------------------------------------
+  # join glucose and census for dob and other infor
+  gluc <- dplyr::left_join(data_SLAM_gluc, data_SLAM_census, by = "idno") 
+  # drop useless vars
+  gluc <- dplyr::select(gluc, -c(lact, cohort, animal_id, tag, taghistory, cage, eartag, name, X))
+  # create age for merging and format data so it makes sense
+  gluc <- dplyr::mutate(gluc, age_wk = difftime(date, dob, units = "weeks"),
+                        date = as.Date(date, "%m%d%Y"))
   
-  ## if vars are specified ensure complete cases for those vars
-  if(is.null(vars)){
-    data2 <- data2
-  }else if(!is.null(vars)){
-    vars_suf <- paste0(vars, suffixes[2])
-    data2 <- data2[complete.cases(data2[vars_suf]),]
-  }
+  # Create nmr -----------------------------------------------------------------
+  # join nmr with census for dob and other info
+  nmr <- dplyr::left_join(data_SLAM_nmr, data_SLAM_census, by = "idno") 
+  # drop useless columns
+  nmr <- dplyr::select(nmr, -c(cohort, animal_id, tag, taghistory, cage, eartag, name, X))
+  # create age for merging and format data so it makes sense
+  nmr <- dplyr::mutate(nmr, age_wk = difftime(date, dob, units = "weeks"),
+                       date = as.Date(date, "%m%d%Y"))
   
+  # Use merge_diftime ----------------------------------------------------------
+  gluc_nmr <- merge_diftime(data1 = gluc,
+                            data2 = nmr,
+                            id = "idno",
+                            age = "age_wk",
+                            vars = c("bw","lean","fluid","fat"))
   
-  data_m <- merge(data1, data2, by.x = id1, by.y = id2, all.x = TRUE, suffixes = suffixes)
-  
-  data_m$dif <- data_m[[age2]] - data_m[[age1]]
-  
-  
-  # where to check for closest date
-  if(where == "both"){
-    data_m <- data_m[order(data_m[[id1]], abs(data_m$dif)), , drop = FALSE]
-    df_dups <- data_m[c(id1,age1)]
-    data_m <- data_m[!duplicated(df_dups), , drop = FALSE]
-    ## threshold
-    data2_cols <- names(data_m)[grepl(paste0(suffixes[2],"$"), names(data_m))]
-    data_m[,data2_cols] <- lapply(data2_cols, function(name){
-      ifelse(abs(data_m$dif) > threshold, NA, data_m[,name] )
-    })
-    
-    
-  } else if(where == "before"){
-    data_m <- data_m[data_m$dif <= 0,]
-    data_m <- data_m[order(data_m[[id1]], -1*data_m$dif), , drop = FALSE]
-    df_dups <- data_m[c(id1,age1)]
-    data_m <- data_m[!duplicated(df_dups), , drop = FALSE]
-    ## threshold
-    data2_cols <- names(data_m)[grepl(paste0(suffixes[2],"$"), names(data_m))]
-    data_m[,data2_cols] <- lapply(data2_cols, function(name){
-      ifelse(data_m$dif*-1 > threshold, NA, data_m[,name] )
-    })
-    
-  } else if(where == "after"){
-    data_m <- data_m[data_m$dif >= 0,]
-    data_m <- data_m[order(data_m[[id1]], data_m$dif), , drop = FALSE]
-    df_dups <- data_m[c(id1,age1)]
-    data_m <- data_m[!duplicated(df_dups), , drop = FALSE]
-    ## threshold
-    data2_cols <- names(data_m)[grepl(paste0(suffixes[2],"$"), names(data_m))]
-    data_m[,data2_cols] <- lapply(data2_cols, function(name){
-      ifelse(data_m$dif > threshold, NA, data_m[,name] )
-    })
-    
-  } else{
-    stop("where must be both, before, or after")
-  }
-  
-  if(clean_vars){
-    suf1_regx <- paste0(suffixes[1],"$")
-    suf2_regx <- paste0(suffixes[2],"$")
-    col1 <- names(data_m)[grepl(suf1_regx, names(data_m))]
-    col2 <- names(data_m)[grepl(suf2_regx, names(data_m))]
-    
-    col1_clean <- gsub(suf1_regx, replacement = "", x = col1)
-    col2_clean <- gsub(suf2_regx, replacement = "", x = col2)
-    
-    if(length(age) == 1){
-      col1_clean <- gsub(age, replacement = age1, x = col1_clean)
-      col2_clean <- gsub(age, replacement = age2, x = col2_clean)
-    } else if(length(age) == 2){
-      col1_clean <- gsub(age[1], replacement = age1, x = col1_clean)
-      col2_clean <- gsub(age[2], replacement = age2, x = col2_clean)
-    }
-    
-    var_keep <- col2[!col2_clean %in% col1_clean]
-    var_keep <- c(col1, var_keep, "dif")
-    
-    data_m <- data_m[,var_keep]
-    names(data_m)[names(data_m) %in% col1] <- col1_clean
-  }
-  
-  return(data_m)
+  # Checkout results
+  head(gluc_nmr)
+} else{
+  message("Install dplyr to run this example")
 }
+
+
 
 ```
 
